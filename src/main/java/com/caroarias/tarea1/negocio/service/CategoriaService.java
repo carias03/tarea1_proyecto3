@@ -1,9 +1,11 @@
 package com.caroarias.tarea1.negocio.service;
 
+import com.caroarias.tarea1.common.ApiResponse;
 import com.caroarias.tarea1.negocio.mappers.CategoriaMapper;
 import com.caroarias.tarea1.negocio.models.dtos.CategoriaDTO;
 import com.caroarias.tarea1.negocio.models.entities.Categoria;
 import com.caroarias.tarea1.negocio.repository.CategoriaRepository;
+import com.caroarias.tarea1.negocio.repository.ProductoRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -15,38 +17,46 @@ import java.util.Optional;
 public class CategoriaService {
 
     private final CategoriaRepository categoriaRepository;
+    private final ProductoRepository productoRepository;
     private final CategoriaMapper categoriaMapper;
 
-    public CategoriaService(CategoriaRepository categoriaRepository, CategoriaMapper categoriaMapper) {
+    public CategoriaService(CategoriaRepository categoriaRepository, ProductoRepository productoRepository, CategoriaMapper categoriaMapper) {
         this.categoriaRepository = categoriaRepository;
+        this.productoRepository = productoRepository;
         this.categoriaMapper = categoriaMapper;
     }
 
-    public ResponseEntity<List<CategoriaDTO>> obtenerTodosCategorias() {
+    public ResponseEntity<ApiResponse<List<CategoriaDTO>>> obtenerTodosCategorias() {
         List<CategoriaDTO> categorias = categoriaRepository.findAll()
                 .stream()
                 .map(categoriaMapper::toDto)
                 .toList();
-        return ResponseEntity.ok(categorias);
+        return ResponseEntity.ok(new ApiResponse<>("Categorías obtenidas exitosamente", categorias));
     }
 
-    public ResponseEntity<CategoriaDTO> obtenerCategoriaPorId(Long id) {
+    public ResponseEntity<?> obtenerCategoriaPorId(Long id) {
         Optional<Categoria> categoria = categoriaRepository.findById(id);
-        return categoria
-                .map(c -> ResponseEntity.ok(categoriaMapper.toDto(c)))
-                .orElse(ResponseEntity.notFound().build());
+        if (categoria.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>("La categoría con id " + id + " no existe"));
+        }
+        return ResponseEntity.ok(
+                new ApiResponse<>("Categoría encontrada", categoriaMapper.toDto(categoria.get()))
+        );
     }
 
-    public ResponseEntity<CategoriaDTO> crearCategoria(CategoriaDTO categoriaDTO) {
+    public ResponseEntity<ApiResponse<CategoriaDTO>> crearCategoria(CategoriaDTO categoriaDTO) {
         Categoria categoria = categoriaMapper.toEntity(categoriaDTO);
         Categoria saved = categoriaRepository.save(categoria);
-        return ResponseEntity.status(HttpStatus.CREATED).body(categoriaMapper.toDto(saved));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse<>("Categoría creada exitosamente", categoriaMapper.toDto(saved)));
     }
 
-    public ResponseEntity<CategoriaDTO> actualizarCategoria(Long id, CategoriaDTO categoriaDTO) {
+    public ResponseEntity<?> actualizarCategoria(Long id, CategoriaDTO categoriaDTO) {
         Optional<Categoria> existing = categoriaRepository.findById(id);
         if (existing.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>("La categoría con id " + id + " no existe"));
         }
 
         Categoria categoria = existing.get();
@@ -54,16 +64,24 @@ public class CategoriaService {
         categoria.setDescripcion(categoriaDTO.getDescripcion());
 
         Categoria updated = categoriaRepository.save(categoria);
-        return ResponseEntity.ok(categoriaMapper.toDto(updated));
+        return ResponseEntity.ok(
+                new ApiResponse<>("Categoría actualizada exitosamente", categoriaMapper.toDto(updated))
+        );
     }
 
-    public ResponseEntity<Void> eliminarCategoriapPorId(Long id) {
+    public ResponseEntity<ApiResponse<?>> eliminarCategoriaPorId(Long id) {
         Optional<Categoria> existing = categoriaRepository.findById(id);
         if (existing.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>("La categoría con id " + id + " no existe"));
+        }
+
+        if (productoRepository.existsByCategoriaId(id)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ApiResponse<>("No se puede eliminar la categoría porque tiene productos asignados"));
         }
 
         categoriaRepository.deleteById(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(new ApiResponse<>("Categoría eliminada exitosamente"));
     }
 }
