@@ -32,9 +32,4 @@ public class AuthController {
     public ResponseEntity<UserDTO> me() {
         return authenticationService.me();
     }
-
-    @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout() {
-        return authenticationService.logout();
-    }
 }
